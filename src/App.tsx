@@ -32,6 +32,7 @@ window.Buffer = Buffer;
 
 interface PeerConnection {
   peerID: string;
+  username: string;
   peer: Peer.Instance;
   stream: MediaStream | null;
 }
@@ -40,7 +41,8 @@ export default function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [peers, setPeers] = useState<PeerConnection[]>([]);
-  const [roomId, setRoomId] = useState('lobby');
+  const [roomId, setRoomId] = useState('World_1');
+  const [username, setUsername] = useState('Steve_' + Math.floor(Math.random() * 1000));
   const [serverUrl, setServerUrl] = useState(window.location.origin);
   const [isMuted, setIsMuted] = useState(false);
   const [isPTT, setIsPTT] = useState(false);
@@ -60,7 +62,6 @@ export default function App() {
       setStream(userStream);
       streamRef.current = userStream;
       
-      // Initial mute state
       userStream.getAudioTracks().forEach(track => {
         track.enabled = !isMuted && (!isPTT || isPTTActive);
       });
@@ -78,23 +79,23 @@ export default function App() {
 
     newSocket.on('connect', () => {
       setIsConnected(true);
-      newSocket.emit('join-room', roomId);
+      newSocket.emit('join-room', { roomId, username });
     });
 
     newSocket.on('disconnect', () => {
       setIsConnected(false);
-      // Cleanup peers on disconnect
       peersRef.current.forEach(p => p.peer.destroy());
       peersRef.current = [];
       setPeers([]);
     });
 
-    newSocket.on('all-users', (users: string[]) => {
+    newSocket.on('all-users', (users: { id: string, name: string }[]) => {
       const newPeers: PeerConnection[] = [];
-      users.forEach(userID => {
-        const peer = createPeer(userID, newSocket.id!, streamRef.current!);
+      users.forEach(({ id, name }) => {
+        const peer = createPeer(id, newSocket.id!, streamRef.current!);
         newPeers.push({
-          peerID: userID,
+          peerID: id,
+          username: name,
           peer,
           stream: null
         });
@@ -103,10 +104,11 @@ export default function App() {
       setPeers(newPeers);
     });
 
-    newSocket.on('user-joined', (payload: { signal: Peer.SignalData, callerId: string }) => {
+    newSocket.on('user-joined', (payload: { signal: Peer.SignalData, callerId: string, username: string }) => {
       const peer = addPeer(payload.signal, payload.callerId, streamRef.current!);
       const peerObj = {
         peerID: payload.callerId,
+        username: payload.username,
         peer,
         stream: null
       };
@@ -132,7 +134,7 @@ export default function App() {
       setPeers(updatedPeers);
     });
 
-  }, [serverUrl, roomId]);
+  }, [serverUrl, roomId, username]);
 
   function createPeer(userToSignal: string, callerId: string, stream: MediaStream) {
     const peer = new Peer({
@@ -198,106 +200,105 @@ export default function App() {
   const handlePTTUp = () => isPTT && setIsPTTActive(false);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0b] text-white font-sans selection:bg-orange-500/30">
-      {/* Background Atmosphere */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden h-screen">
-        <div className="absolute top-0 -left-1/4 w-1/2 h-1/2 bg-orange-500/10 blur-[120px] rounded-full" />
-        <div className="absolute bottom-0 -right-1/4 w-1/2 h-1/2 bg-blue-500/10 blur-[120px] rounded-full" />
-      </div>
+    <div className="min-h-screen bg-[#1e1e1e] text-[#e1e1e1] font-sans selection:bg-[#3c8527]/30">
+      {/* Minecraft-style Overlay */}
+      <div className="fixed inset-0 pointer-events-none border-[12px] border-[#313131] z-50 mix-blend-overlay opacity-20" />
 
-      <main className="relative z-10 max-w-lg mx-auto px-6 py-12 flex flex-col min-h-screen">
+      <main className="relative z-10 max-w-lg mx-auto px-6 py-10 flex flex-col min-h-screen">
         {/* Header */}
-        <header className="flex items-center justify-between mb-12">
+        <header className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tighter flex items-center gap-2">
-              <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center">
-                <Radio className="w-5 h-5" />
+            <h1 className="text-2xl font-bold tracking-tight text-[#e1e1e1] flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#3c8527] border-b-4 border-[#245218] rounded flex items-center justify-center p-1 shadow-inner">
+                <img src="https://api.iconify.design/mdi:minecraft.svg" className="w-8 h-8 invert opacity-80" alt="MC" />
               </div>
-              DROIDVOICE
+              <span>DROIDVOICE <span className="text-[#3c8527] ml-1">BE</span></span>
             </h1>
-            <p className="text-xs text-gray-400 font-mono mt-1 tracking-widest uppercase">
-              Secure Voice Channel
+            <p className="text-[10px] text-[#8b8b8b] font-mono mt-1 uppercase tracking-widest leading-none">
+              In-Game Link: {isConnected ? "CONNECTED" : "OFFLINE"}
             </p>
           </div>
           <button 
             onClick={() => setShowSettings(!showSettings)}
-            className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors border border-white/10"
+            className="p-3 bg-[#313131] border-2 border-[#4a4a4a] hover:bg-[#3a3a3a] rounded transition-transform active:scale-95"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-5 h-5 text-[#8b8b8b]" />
           </button>
         </header>
 
-        {/* Status Card */}
-        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <span className="text-sm font-medium text-gray-400 uppercase tracking-widest">Status</span>
-            <div className={cn(
-              "flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold transition-all",
-              isConnected ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
-            )}>
-              {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-              {isConnected ? "CONNECTED" : "DISCONNECTED"}
+        {/* Global Connection Info */}
+        <div className="bg-[#313131] border-2 border-[#414141] p-1 mb-6 shadow-2xl">
+          <div className="flex items-center justify-between bg-[#252525] px-4 py-2 border-2 border-t-[#151515] border-l-[#151515] border-r-[#4a4a4a] border-b-[#4a4a4a]">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "w-3 h-3 rounded-sm shadow-sm",
+                isConnected ? "bg-[#3c8527] animate-pulse" : "bg-[#bf2e2e]"
+              )} />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-[#8b8b8b] uppercase tracking-tighter">Current World</span>
+                <span className="text-xs font-medium text-[#e1e1e1] leading-none">{roomId}</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-bold text-[#8b8b8b] uppercase tracking-tighter">Player</span>
+              <span className="block text-xs font-medium text-[#d4af37] leading-none">{username}</span>
             </div>
           </div>
-          
-          <div className="flex flex-col items-center py-4">
-            <h2 className="text-xl font-medium mb-1">{roomId}</h2>
-            <p className="text-xs text-gray-500 font-mono">{serverUrl}</p>
-          </div>
+        </div>
 
-          <div className="mt-8 flex gap-4">
-            {!isConnected ? (
-              <button 
-                onClick={connectToServer}
-                className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xl shadow-orange-900/20"
-              >
-                <Phone className="w-5 h-5" /> JOIN CHANNEL
-              </button>
-            ) : (
-              <button 
-                onClick={() => socket?.disconnect()}
-                className="w-full py-4 bg-red-600/20 hover:bg-red-600/30 text-red-500 border border-red-500/30 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
-              >
-                <PhoneOff className="w-5 h-5" /> LEAVE
-              </button>
-            )}
+        {/* Main Action Area */}
+        <section className="space-y-6 mb-8">
+          {!isConnected ? (
+            <button 
+              onClick={connectToServer}
+              className="w-full py-4 bg-[#3c8527] hover:bg-[#4ea632] text-white border-b-4 border-[#245218] active:border-b-2 active:translate-y-0.5 rounded font-bold flex items-center justify-center gap-3 transition-colors shadow-lg"
+            >
+              <Phone className="w-5 h-5" /> START VOICE LINK
+            </button>
+          ) : (
+            <button 
+              onClick={() => socket?.disconnect()}
+              className="w-full py-4 bg-[#bf2e2e] hover:bg-[#df3e3e] text-white border-b-4 border-[#7a1e1e] active:border-b-2 active:translate-y-0.5 rounded font-bold flex items-center justify-center gap-3 transition-colors"
+            >
+              <PhoneOff className="w-5 h-5" /> TERMINATE LINK
+            </button>
+          )}
+
+          {/* Controls Grid */}
+          <div className="grid grid-cols-2 gap-4">
+            <button 
+              onClick={() => setIsMuted(!isMuted)}
+              disabled={isPTT}
+              className={cn(
+                "py-6 bg-[#313131] border-2 rounded flex flex-col items-center gap-2 transition-all active:translate-y-0.5",
+                isMuted ? "border-[#bf2e2e] text-[#bf2e2e]" : "border-[#4a4a4a] text-[#e1e1e1]",
+                isPTT && "opacity-30 cursor-not-allowed border-transparent"
+              )}
+            >
+              {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+              <span className="text-[10px] font-bold uppercase tracking-widest">{isMuted ? "Muted" : "Active"}</span>
+            </button>
+
+            <button 
+              onClick={() => setIsPTT(!isPTT)}
+              className={cn(
+                "py-6 bg-[#313131] border-2 rounded flex flex-col items-center gap-2 transition-all active:translate-y-0.5",
+                isPTT ? "border-[#d4af37] text-[#d4af37]" : "border-[#4a4a4a] text-[#e1e1e1]"
+              )}
+            >
+              <Radio className="w-6 h-6" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">PTT MODE</span>
+            </button>
           </div>
         </section>
 
-        {/* Controls */}
-        <section className="grid grid-cols-2 gap-4 mb-8">
-          <button 
-            onClick={() => setIsMuted(!isMuted)}
-            disabled={isPTT}
-            className={cn(
-              "p-6 rounded-3xl flex flex-col items-center gap-3 transition-all border",
-              isMuted ? "bg-red-500/10 border-red-500/20 text-red-500" : "bg-white/5 border-white/10 text-white",
-              isPTT && "opacity-30 cursor-not-allowed"
-            )}
-          >
-            {isMuted ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
-            <span className="text-xs font-bold uppercase tracking-widest">{isMuted ? "Muted" : "Live"}</span>
-          </button>
-
-          <button 
-            onClick={() => setIsPTT(!isPTT)}
-            className={cn(
-              "p-6 rounded-3xl flex flex-col items-center gap-3 transition-all border",
-              isPTT ? "bg-orange-500/10 border-orange-500/20 text-orange-500" : "bg-white/5 border-white/10 text-white"
-            )}
-          >
-            <Radio className="w-8 h-8" />
-            <span className="text-xs font-bold uppercase tracking-widest">{isPTT ? "PTT ON" : "PTT OFF"}</span>
-          </button>
-        </section>
-
-        {/* PTT Large Button */}
+        {/* PTT Trigger */}
         <AnimatePresence>
           {isPTT && (
             <motion.div 
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 50 }}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
               className="mb-8"
             >
               <button 
@@ -306,89 +307,86 @@ export default function App() {
                 onTouchStart={handlePTTDown}
                 onTouchEnd={handlePTTUp}
                 className={cn(
-                  "w-full h-48 rounded-[3rem] border-2 flex flex-col items-center justify-center gap-4 transition-all active:scale-[0.98]",
+                  "w-full h-40 bg-[#313131] border-4 flex flex-col items-center justify-center gap-4 transition-all rounded-xl active:scale-[0.99]",
                   isPTTActive 
-                    ? "bg-orange-500 border-orange-400 shadow-[0_0_50px_rgba(249,115,22,0.4)]" 
-                    : "bg-white/5 border-white/10 grayscale opacity-50"
+                    ? "bg-[#3c8527] border-[#fff]/20 shadow-[inset_0_0_20px_rgba(255,255,255,0.1)]" 
+                    : "border-[#4a4a4a] opacity-60 grayscale-[0.5]"
                 )}
               >
                 <div className={cn(
-                  "w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all",
-                  isPTTActive ? "bg-white border-white/20 scale-110" : "border-white/10"
+                  "w-16 h-16 bg-[#252525] border-2 rounded-full flex items-center justify-center transition-all",
+                  isPTTActive ? "border-white/40 scale-110" : "border-[#4a4a4a]"
                 )}>
-                  <Mic className={cn("w-10 h-10 transition-colors", isPTTActive ? "text-orange-600" : "text-white/20")} />
+                  <Mic className={cn("w-8 h-8 transition-colors", isPTTActive ? "text-white" : "text-[#4a4a4a]")} />
                 </div>
-                <span className={cn("text-sm font-bold uppercase tracking-[0.2em]", isPTTActive ? "text-white" : "text-white/20")}>
-                  {isPTTActive ? "Transmitting..." : "Push to Talk"}
+                <span className={cn("text-[10px] font-bold uppercase tracking-[0.2em]", isPTTActive ? "text-white animate-pulse" : "text-[#8b8b8b]")}>
+                  {isPTTActive ? "TRANSMITTING..." : "HOLD TO TALK"}
                 </span>
               </button>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Volume */}
-        <section className="bg-white/5 border border-white/10 rounded-3xl p-6 mb-8">
+        {/* Volume & Audio Players */}
+        <section className="bg-[#313131] border-2 border-[#4a4a4a] rounded shadow-inner p-5 mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Volume2 className="w-4 h-4 text-gray-400" />
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Volume Control</span>
+              <Volume2 className="w-4 h-4 text-[#8b8b8b]" />
+              <span className="text-[10px] font-bold tracking-widest uppercase text-[#8b8b8b]">Master Output</span>
             </div>
-            <span className="text-xs font-mono">{Math.round(volume * 100)}%</span>
+            <span className="text-xs font-mono text-[#d4af37]">{Math.round(volume * 100)}%</span>
           </div>
           <input 
-            type="range" 
-            min="0" 
-            max="1" 
-            step="0.01" 
-            value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="w-full accent-orange-600 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
+            type="range" min="0" max="1" step="0.01" 
+            value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="w-full accent-[#3c8527] h-2 bg-[#1e1e1e] rounded appearance-none cursor-pointer border border-[#4a4a4a]"
           />
         </section>
 
-        {/* Peer List */}
+        {/* Player List */}
         <section className="flex-1">
-          <div className="flex items-center gap-2 mb-4 px-2">
-            <Users className="w-4 h-4 text-gray-400" />
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Active Peers ({peers.length + (isConnected ? 1 : 0)})</span>
+          <div className="flex items-center justify-between mb-4 border-b border-[#313131] pb-2">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#8b8b8b]" />
+              <span className="text-[10px] font-bold tracking-widest uppercase text-[#8b8b8b]">Players Nearby</span>
+            </div>
+            <span className="text-[10px] font-mono text-[#8b8b8b] bg-[#313131] px-2 py-0.5 rounded">Count: {peers.length + (isConnected ? 1 : 0)}</span>
           </div>
           
-          <div className="space-y-3">
+          <div className="space-y-2">
             {isConnected && (
-              <div className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between">
+              <div className="group bg-[#252525] border-2 border-[#313131] p-3 rounded flex items-center justify-between hover:border-[#3c8527]/30 transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-orange-600/20 rounded-xl flex items-center justify-center">
-                    <span className="text-orange-500 font-bold">ME</span>
+                  <div className="relative">
+                    <img 
+                      src={`https://api.mineatar.io/face/${username}?scale=8`} 
+                      className="w-10 h-10 pixelated bg-[#3c8527] p-0.5 rounded-sm"
+                      onError={(e) => { e.currentTarget.src = "https://api.mineatar.io/face/Steve?scale=8" }}
+                      alt="Skin"
+                    />
+                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#3c8527] border-2 border-[#252525] rounded-full" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Local User</p>
-                    <p className="text-[10px] text-gray-500 font-mono tracking-tighter opacity-50 uppercase">Broadcast: {isMuted ? 'Muted' : (isPTT && !isPTTActive) ? 'Idle' : 'Active'}</p>
+                    <p className="text-sm font-bold text-[#e1e1e1]">{username}</p>
+                    <p className="text-[9px] text-[#8b8b8b] uppercase tracking-tighter">(LOCAL USER)</p>
                   </div>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 h-4 items-end">
                   {(!isMuted && (!isPTT || isPTTActive)) && (
-                    <motion.div 
-                      animate={{ scale: [1, 1.2, 1] }} 
-                      transition={{ repeat: Infinity, duration: 1 }}
-                      className="w-2 h-2 bg-emerald-500 rounded-full" 
-                    />
+                    <motion.div animate={{ height: [4, 12, 6, 14, 4] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-[#3c8527]" />
                   )}
                 </div>
               </div>
             )}
 
             {peers.map((peer) => (
-              <PeerAudio 
-                key={peer.peerID} 
-                peer={peer} 
-                volume={volume} 
-              />
+              <PeerAudio key={peer.peerID} peer={peer} volume={volume} />
             ))}
 
             {peers.length === 0 && !isConnected && (
-              <div className="py-12 flex flex-col items-center opacity-30">
-                <Users className="w-12 h-12 mb-4" />
-                <p className="text-sm font-medium">No one in channel</p>
+              <div className="py-12 text-center opacity-20">
+                <img src="https://api.iconify.design/mdi:account-off.svg" className="w-12 h-12 mx-auto mb-2 invert" alt="" />
+                <p className="text-xs uppercase font-bold tracking-[0.2em]">Disconnected from World</p>
               </div>
             )}
           </div>
@@ -398,49 +396,67 @@ export default function App() {
         <AnimatePresence>
           {showSettings && (
             <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/90 backdrop-blur-sm"
             >
-              <div className="w-full max-w-sm bg-[#151518] border border-white/10 rounded-[2rem] p-8">
-                <h3 className="text-xl font-bold mb-6">Channel Settings</h3>
-                
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Server Address</label>
-                    <input 
-                      type="text" 
-                      value={serverUrl} 
-                      onChange={(e) => setServerUrl(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500 transition-colors"
-                      placeholder="http://192.168.1.1:3000"
-                    />
+              <div className="w-full max-w-sm bg-[#313131] border-2 border-[#4a4a4a] p-1 shadow-2xl">
+                <div className="bg-[#252525] p-6 border-2 border-t-[#151515] border-l-[#151515] border-r-[#4a4a4a] border-b-[#4a4a4a]">
+                  <h3 className="text-xl font-bold mb-6 text-[#e1e1e1] uppercase tracking-wider">World Settings</h3>
+                  
+                  <div className="space-y-5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#8b8b8b] uppercase tracking-[0.2em] mb-2">Minecraft IGN</label>
+                      <input 
+                        type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                        className="w-full bg-[#1e1e1e] border-2 border-[#4a4a4a] px-4 py-3 text-sm focus:outline-none focus:border-[#d4af37]"
+                        placeholder="Steve"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#8b8b8b] uppercase tracking-[0.2em] mb-2">Voice Server Link</label>
+                      <input 
+                        type="text" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)}
+                        className="w-full bg-[#1e1e1e] border-2 border-[#4a4a4a] px-4 py-3 text-sm focus:outline-none focus:border-[#d4af37]"
+                        placeholder="http://192.168.1.1:3000"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#8b8b8b] uppercase tracking-[0.2em] mb-2">Room ID</label>
+                      <input 
+                        type="text" value={roomId} onChange={(e) => setRoomId(e.target.value)}
+                        className="w-full bg-[#1e1e1e] border-2 border-[#4a4a4a] px-4 py-3 text-sm focus:outline-none focus:border-[#d4af37]"
+                        placeholder="Default_World"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Room Name</label>
-                    <input 
-                      type="text" 
-                      value={roomId} 
-                      onChange={(e) => setRoomId(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500 transition-colors"
-                      placeholder="e.g. general"
-                    />
-                  </div>
+                  <button 
+                    onClick={() => { setShowSettings(false); socket?.disconnect(); }}
+                    className="w-full mt-8 py-4 bg-[#3c8527] text-white border-b-4 border-[#245218] active:border-b-2 active:translate-y-0.5 rounded font-bold uppercase tracking-widest"
+                  >
+                    SAVE & RECONNECT
+                  </button>
+                  
+                  <button 
+                    onClick={() => setShowSettings(false)}
+                    className="w-full mt-2 py-2 text-[#8b8b8b] text-[10px] font-bold uppercase tracking-widest hover:text-[#e1e1e1]"
+                  >
+                    Cancel
+                  </button>
                 </div>
-
-                <button 
-                  onClick={() => setShowSettings(false)}
-                  className="w-full mt-8 py-4 bg-white text-black rounded-2xl font-bold transition-all active:scale-95"
-                >
-                  SAVE & CLOSE
-                </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </main>
+
+      <style>{`
+        .pixelated {
+          image-rendering: pixelated;
+        }
+      `}</style>
     </div>
   );
 }
@@ -493,22 +509,26 @@ const PeerAudio: FC<{ peer: PeerConnection; volume: number }> = ({ peer, volume 
 
   return (
     <div className={cn(
-      "p-4 bg-white/5 border rounded-2xl flex items-center justify-between transition-all duration-300",
-      isSpeaking ? "border-orange-500/50 bg-orange-500/5 shadow-[0_0_20px_rgba(249,115,22,0.1)]" : "border-white/5"
+      "bg-[#252525] border-2 p-3 rounded flex items-center justify-between transition-all duration-300",
+      isSpeaking ? "border-[#3c8527] bg-[#253022]" : "border-[#313131]"
     )}>
       <div className="flex items-center gap-3">
-        <div className={cn(
-          "w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
-          isSpeaking ? "bg-orange-600 shadow-lg shadow-orange-900/40" : "bg-white/10"
-        )}>
-          <span className={cn("font-bold text-xs uppercase", isSpeaking ? "text-white" : "text-gray-400")}>
-            {peer.peerID.slice(0, 2)}
-          </span>
+        <div className="relative">
+          <img 
+            src={`https://api.mineatar.io/face/${peer.username}?scale=8`} 
+            className={cn(
+              "w-10 h-10 pixelated p-0.5 rounded-sm transition-all",
+              isSpeaking ? "bg-[#3c8527] shadow-[0_0_10px_rgba(60,133,39,0.5)]" : "bg-[#313131]"
+            )}
+            onError={(e) => { e.currentTarget.src = "https://api.mineatar.io/face/Steve?scale=8" }}
+            alt="NPC"
+          />
+          {isSpeaking && <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#3c8527] border-2 border-[#222] rounded-full animate-pulse" />}
         </div>
         <div>
-          <p className="text-sm font-medium">User_{peer.peerID.slice(0, 4)}</p>
-          <p className="text-[10px] text-gray-500 font-mono uppercase">
-            {isSpeaking ? "• Speaking..." : "Status: Connected"}
+          <p className="text-sm font-bold text-[#e1e1e1]">{peer.username}</p>
+          <p className={cn("text-[9px] uppercase font-bold tracking-tighter", isSpeaking ? "text-[#3c8527]" : "text-[#8b8b8b]")}>
+            {isSpeaking ? "• Speaking" : "Idle"}
           </p>
         </div>
       </div>
@@ -518,15 +538,11 @@ const PeerAudio: FC<{ peer: PeerConnection; volume: number }> = ({ peer, volume 
           <motion.div 
             key={i}
             animate={{ 
-              height: isSpeaking ? [4, 12, 6, 16, 4][i % 5] : 4,
-              opacity: isSpeaking ? 1 : 0.3
+              height: isSpeaking ? [4, 14, 8, 18, 4][i % 5] : 4,
+              opacity: isSpeaking ? 1 : 0.2
             }}
-            transition={{ 
-              repeat: Infinity, 
-              duration: 0.4,
-              delay: i * 0.05
-            }}
-            className="w-1 bg-orange-500 rounded-full"
+            transition={{ repeat: Infinity, duration: 0.4, delay: i * 0.05 }}
+            className="w-1 bg-[#3c8527] rounded-sm"
           />
         ))}
       </div>

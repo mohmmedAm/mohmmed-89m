@@ -21,19 +21,19 @@ async function startServer() {
   const PORT = 3000;
 
   // Signaling logic
-  const rooms = new Map<string, Set<string>>(); // roomID -> set of socketIDs
+  const rooms = new Map<string, Map<string, string>>(); // roomID -> Map<socketID, username>
   const socketToRoom = new Map<string, string>(); // socketID -> roomID
 
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    socket.on('join-room', (roomId: string) => {
-      console.log(`Socket ${socket.id} joining room ${roomId}`);
+    socket.on('join-room', ({ roomId, username }: { roomId: string, username: string }) => {
+      console.log(`Socket ${socket.id} (${username}) joining room ${roomId}`);
       
-      const room = rooms.get(roomId) || new Set();
-      const usersInRoom = Array.from(room);
+      const room = rooms.get(roomId) || new Map();
+      const usersInRoom = Array.from(room.entries()).map(([id, name]) => ({ id, name }));
       
-      room.add(socket.id);
+      room.set(socket.id, username);
       rooms.set(roomId, room);
       socketToRoom.set(socket.id, roomId);
       socket.join(roomId);
@@ -43,10 +43,14 @@ async function startServer() {
     });
 
     socket.on('sending-signal', (payload) => {
-      console.log(`Forwarding signal from ${socket.id} to ${payload.userToSignal}`);
+      const roomId = socketToRoom.get(socket.id);
+      const room = rooms.get(roomId || '');
+      const username = room?.get(socket.id) || 'Guest';
+
       io.to(payload.userToSignal).emit('user-joined', {
         signal: payload.signal,
-        callerId: socket.id
+        callerId: socket.id,
+        username: username
       });
     });
 

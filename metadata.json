@@ -1,6 +1,6 @@
 {
-  "name": "DroidVoice",
-  "description": "A high-performance real-time voice chat application featuring WebRTC, push-to-talk, and native Android support via Capacitor.",
+  "name": "DroidVoice: Bedrock",
+  "description": "A specialized real-time voice chat companion for Minecraft Bedrock Edition servers, featuring WebRTC and push-to-talk.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["real-time", "voice-chat", "webrtc"]
 }

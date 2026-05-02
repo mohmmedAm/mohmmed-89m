@@ -1,0 +1,6 @@
+{
+  "name": "DroidVoice",
+  "description": "A high-performance real-time voice chat application featuring WebRTC, push-to-talk, and native Android support via Capacitor.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["real-time", "voice-chat", "webrtc"]
+}

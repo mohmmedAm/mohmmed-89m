@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DroidVoice</string>
+    <string name="title_activity_main">DroidVoice</string>
+    <string name="package_name">com.droidvoice.app</string>
+    <string name="custom_url_scheme">com.droidvoice.app</string>
+</resources>
